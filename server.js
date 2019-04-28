@@ -36,13 +36,13 @@ function newConnection(socket){
 	if(Object.keys(io.sockets.sockets).length == 1){
 		TABLE = new Table()
 	}
-	TABLE.addPlayer(socket.id)
+	TABLE.queuePlayerAddition(socket.id)
 
 	// socket.on('player', (player)=>{
 	// 	TABLE.updatePlayer(socketId,player)	
 	// });
 	socket.on('disconnect', function(){
-		TABLE.removePlayer(socket.id)
+		TABLE.queuePlayerRemoval(socket.id)
 		console.log('user disconnected ' + socket.id);
 	});
 }
@@ -51,24 +51,50 @@ class Table {
 
 	constructor(){
 		this.players = []
+		this.playersToRemove = []
+		this.playersToAdd = []
 		this.deck = new Deck()
 		this.cards = []
-		this.pot = 0
+		this.pots = new Pots()
 		this.currentBet = 0
+		this.timeLeft = 0
 		this.bigBlind = 100
 		this.smallBlind = this.bigBlind/2
+		this.gameStarted = false
+	}
+
+	queuePlayerAddition(socketId){
+		if(!this.gameStarted){
+			this.addPlayer(socketId)
+			return
+		}
+		for(let i = 0; i < this.playersToRemove.length; i++){
+			if(this.playersToRemove[i] == socketId){
+				this.playersToRemove.splice(i,1)
+				return
+			}
+		}
+		this.playersToAdd.push(socketId)
+	}
+
+	addQueuedPlayers(){
+		while(this.playersToAdd.length!=0){
+			this.addPlayer(this.playersToAdd.shift())
+		}
+		this.updateAllPlayers()
 	}
 
 	addPlayer(socketId){
 		if(this.players.length >= 9){return}
 		let player = new Player(socketId)
 		this.players.push(player)
+		this.updateAllPlayers()
 		console.log("Adding player "+socketId)
 		if(this.players.length == 2){
 			console.log("Starting game")
-			this.dealCards()
+			this.gameStarted = true
+			setTimeout(this.dealCards.bind(this),10*1000)
 		}
-		this.updateAllPlayers()
 		return player
 	}
 
@@ -78,6 +104,7 @@ class Table {
 			if(this.players[i].socketId==socketId){
 				if(this.players[i].isTurn && this.players[i].inHand){
 					this.players[i].currentBet = player.currentBet
+					this.players[i].totalBet = player.totalBet
 					this.players[i].stack = player.stack
 					this.players[i].isTurn = false;
 					this.updateAllPlayers()
@@ -88,16 +115,44 @@ class Table {
 		console.log("Player not found to update: "+socketId)
 	}
 
+	queuePlayerRemoval(socketId){
+		if(!this.gameStarted){
+			this.removePlayer(socketId)
+			return
+		}
+		for(let i = 0; i < this.playersToAdd.length; i++){
+			if(this.playersToAdd[i] == socketId){
+				this.playersToAdd.splice(i,1)
+				return
+			}
+		}
+		// for(let i = 0; i < this.players.length; i++){
+		// 	if(this.players[i].socketId==socketId && this.players[i].isTurn){
+		// 		// Handle remove if turn
+		// 		this.updatePlayer(socketId,this.players[i])
+		// 	}
+		// }
+		this.playersToRemove.push(socketId)
+	}
+
+	removeQueuedPlayers(){
+		while(this.playersToRemove.length!=0){
+			this.removePlayer(this.playersToRemove.shift())
+		}
+		if(this.players.length < 2){
+			this.gameStarted = false
+		}
+		this.updateAllPlayers()
+	}
+
 	removePlayer(socketId){
 		console.log("Removing Player: "+socketId)
 		for(let i = 0; i < this.players.length; i++){
 			if(this.players[i].socketId==socketId){
 				this.players.splice(i,1)
-				this.updateAllPlayers()
-				return
+				break;
 			}
 		}
-		console.log("Player not found to remove: "+socketId)
 	}
 
 	moveBlinds(){
@@ -107,6 +162,8 @@ class Table {
 	updateAllPlayers(){
 		console.log("Updating players")
 		let cards = []
+		let tempDeck = this.deck;
+		this.deck = []
 		for(let i = 0; i < this.players.length; i++){
 			cards.push(JSON.parse(JSON.stringify(this.players[i].cards)))
 			this.players[i].cards = []
@@ -119,6 +176,7 @@ class Table {
 		for(let i = 0; i < this.players.length; i++){
 			this.players[i].cards = cards[i]
 		}
+		this.deck = tempDeck
 	}
 
 	isPotGood(){
@@ -149,7 +207,7 @@ class Table {
 		while((!this.isPotGood() || numTurns < this.players.length) && !this.isOneLeft()){ // is pot good doesn't account for BB check
 			await this.players[i].getBet()
 			// console.log("Player response: ",this.players[i])
-			if(this.players[i].currentBet == this.currentBet){ // Call
+			if(this.players[i].currentBet == this.currentBet || (this.players[i].currentBet < this.currentBet && this.players[i].stack == 0)){ // Call
 				console.log("Player "+this.players[i].socketId+" called "+this.players[i].currentBet)
 
 			} else if (this.players[i].currentBet < this.currentBet){ // Fold
@@ -165,13 +223,7 @@ class Table {
 			numTurns++;
 		}
 		// Reset betting stuff
-
-		for(let i = 0; i < this.players.length; i++){
-			this.pot += this.players[i].currentBet;
-			this.players[i].currentBet = 0;
-			this.isTurn = false
-
-		}
+		this.pots.addBettingRoundToPot()
 	}
 
 	handleOnePersonRemaining(){
@@ -184,9 +236,10 @@ class Table {
 				}
 			}
 			console.log("Only Player "+player.socketId+" remains!")
-			player.stack += this.pot;
-			this.pot = 0;
-			this.currentBet = 0
+			player.stack += this.pots.payoutWinner(player.totalBet)
+			if(this.pots.getTotalPotAmount()!=0){
+				console.log("handleOnePersonRemaining: Last person not qualified for all the money")
+			}
 			this.dealCards()
 			return true
 		}
@@ -196,11 +249,14 @@ class Table {
 	clearBoard(){
 		this.deck = new Deck()
 		this.cards = []
-		this.pot = 0
+		this.pots = new Pots()
 		this.currentBet = 0
+		this.addQueuedPlayers()
+		this.removeQueuedPlayers()
 		for(let i = 0; i < this.players.length; i++){
 			this.players[i].clearCards()
 			this.players[i].currentBet = 0;
+			this.players[i].totalBet = 0;
 			this.players[i].inHand = true;
 			this.players[i].isTurn = false;
 		}
@@ -209,6 +265,9 @@ class Table {
 	dealCards(){
 		console.log("Dealing Cards")
 		this.clearBoard()
+		if(!this.gameStarted){
+			return
+		}
 		this.moveBlinds()
 		for(let i = 0; i < this.players.length; i++){
 			this.players[i].dealCard(this.deck.dealCard())
@@ -222,10 +281,11 @@ class Table {
 	async preflopBetting(){
 		console.log("Starting Preflop Betting")
 		this.currentBet = this.bigBlind
-		this.pot = 0;
 		this.players[0].currentBet = Math.min(this.smallBlind,this.players[0].stack)
+		this.players[0].totalBet += this.players[0].currentBet;
 		this.players[0].stack -= this.players[0].currentBet
 		this.players[1].currentBet = Math.min(this.bigBlind,this.players[1].stack)
+		this.players[1].totalBet += this.players[1].currentBet;
 		this.players[1].stack -= this.players[1].currentBet
 		await this.performBettingRound(2)
 		if(this.handleOnePersonRemaining()){
@@ -304,12 +364,14 @@ class Table {
 			}
 		}
 		hands = sortHands(hands)
-		let winner = this.players[hands[0][0]];
 		console.log(JSON.stringify(hands))
-		console.log("Player "+winner.socketId+" has won!")
-		winner.stack += this.pot;
-		this.pot = 0;
-		this.currentBet = 0
+		let i = 0;
+		while(this.pots.getTotalPotAmount()!=0){
+			let winner = this.players[hands[i][0]];
+			console.log("Player "+winner.socketId+" has won!")
+			winner.stack += this.pots.payoutWinner(winner.totalBet);
+			i++;
+		}
 		this.dealCards()
 	}
 
@@ -322,8 +384,20 @@ class Player {
 		this.socketId = socketId
 		this.stack = 10000
 		this.currentBet = 0
+		this.totalBet = 0
 		this.inHand = false
 		this.isTurn = false
+		this.name = this.getRandomName()
+	}
+
+	getRandomName(){
+		let names = ['Job','Dom','Jake','Jacob','Grey','Davin','Wyatt','Yatt','Doug',
+					 'Alex','Tan','Alex Tan','Chostick','Inhee','Banaenae','Flying Arab',
+					 'Shovel Hermit','Carissa','Kiley','Maddie Pots','Belinda','James',
+					 'Parrp','LotsOfRamen69','EllenPage','Thomas','Fuck Lmao Almost Forgot About Devon',
+					 'Devon','Dev','Lydia']
+		let index = Math.floor(Math.random()*names.length)
+		return names[index]
 	}
 
 	dealCard(card){
@@ -341,6 +415,9 @@ class Player {
 				console.log("Getting bet from "+this.socketId)
 				let timer;
 				this.isTurn = true;
+				let timeAmount = 60*1000
+				TABLE.timeLeft = timeAmount
+
 				TABLE.updateAllPlayers()
 		
 				function responseHandler(message) {
@@ -348,20 +425,20 @@ class Player {
 					resolve(message);
 					clearTimeout(timer);
 				}
-				io.sockets.connected[this.socketId].once('player', responseHandler);
-				// io.to(`${this.socketId}`).once('player', responseHandler); 
-		
-				// set timeout so if a response is not received within a 
-				// reasonable amount of time, the promise will reject
+				if(io.sockets.connected[this.socketId]){
+					io.sockets.connected[this.socketId].once('player', responseHandler);
+				} else {
+					// Player disconnected
+					this.inHand = false
+					resolve(this);
+				}
 				timer = setTimeout(function(){
 					console.log("Player took too long to respond to bet")
-					// reject(new Error("timeout waiting for msg"));
 					resolve(this)
-					// io.sockets.connected[this.socketId].removeListener('player', responseHandler);
 					if(io.sockets.connected[this.socketId]){
 						io.sockets.connected[this.socketId].off('player',responseHandler);
 					}
-				}.bind(this), 300*1000);
+				}.bind(this), timeAmount);
 		
 			});
 		}.bind(this)
@@ -465,6 +542,89 @@ function compareScores(score1,score2){ // Ret + if score2 is better
 		}
 	}
 }
+
+class Pots {
+
+	constructor(){
+		this.pots = [[0,0]]
+		// Current pot needed or always last?
+	}
+
+	addBettingRoundToPot(){
+		let players = TABLE.players
+		let newAllInFound = true
+		let prevMinAllIn = 0 // Maybe do something here idk might be useless
+		while(newAllInFound){
+			newAllInFound = false;
+			let minAllIn = 0
+			for(let i = 0; i < players.length; i++){
+				let player = players[i];
+				if(player.currentBet > prevMinAllIn && player.stack == 0){
+					if(!newAllInFound){
+						newAllInFound = true
+						minAllIn = player.currentBet;
+					} else if(minAllIn > player.currentBet) {
+						minAllIn = player.currentBet;
+					}
+				}
+			}
+			if(newAllInFound){
+				let allInPot = 0
+				for(let i = 0; i < players.length; i++){
+					let player = players[i]
+					let subtractAmount = Math.min(minAllIn,player.currentBet)
+					player.currentBet -= subtractAmount
+					allInPot += subtractAmount
+				}
+				this.addToPot(minAllIn,allInPot)
+				this.makeNewPot()
+			}
+		}
+		let allInPotRecent = 0
+		let stakeNeeded = 0
+		for(let i = 0; i < players.length; i++){
+			let player = players[i]
+			allInPotRecent += player.currentBet
+			player.currentBet = 0
+			if(stakeNeeded < player.currentBet){
+				stakeNeeded = player.currentBet
+			}
+			if(stakeNeeded != 0 && player.currentBet != 0 && player.currentBet != stakeNeeded){
+				console.log("addBettingRoundToPot: Potential error bets not uniform and no all in")
+			}
+		}
+		this.addToPot(stakeNeeded,allInPotRecent)
+	}
+
+	addToPot(qualifier,amount){
+		this.pots[this.pots.length-1][0] += qualifier
+		this.pots[this.pots.length-1][1] += amount
+	}
+
+	makeNewPot(){
+		this.pots.push([this.pots[this.pots.length-1][0],0]) // Start at old stake value
+	}
+
+	payoutWinner(stake){
+		let payout = 0;
+		for(let i = 0; i < this.pots.length; i++){
+			if(this.pots[i][0] <= stake){
+				payout += this.pots[i][1]
+				this.pots[i] = [0,0]
+			}
+		}
+		return payout
+	}
+
+	getTotalPotAmount(){
+		let total = 0;
+		for(let i = 0; i < this.pots.length; i++){
+			total += this.pots[i][1]
+		}
+		return total
+	}
+}
+
 
 function getHandScore(hand){
 	let score = getScoreStraightFlush(hand)
@@ -642,6 +802,7 @@ function getScoreFlush(hand){
 function getScoreStraight(hand){ // Ace
 	let score = []
 	let startValue = -1;
+	let previousValue = -1;
 	let streak = 1
 	for(let i = 0; i < hand.length; i++){
 		let value = VALUES_MAP.get(hand[i].value)
@@ -652,12 +813,13 @@ function getScoreStraight(hand){ // Ace
 				score.push(startValue)
 				break;
 			}
-		} else if (startValue == value) {
+		} else if (startValue == previousValue) {
 			// Just skip over it
 		} else {
 			startValue = value
 			streak = 1
 		}
+		previousValue = value
 	}
 	return score
 }

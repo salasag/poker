@@ -53,7 +53,7 @@ function setup(){
    CANVAS_HEIGHT = windowHeight;
    socket = io.connect();
    console.log(io)
-   textFont(FONT)
+   //textFont(FONT)
    textAlign(LEFT, TOP);
    socket.on('table', updateTableInfo);
    background(255)
@@ -87,62 +87,6 @@ function drawObjects(){
   if(tableView){
     tableView.draw()
   }
-  // drawOtherPlayers()
-  // drawPlayer()
-}
-
-function drawOtherPlayers(){
-  if(!table || !table.players){
-    return
-  }
-  fill(200)
-  stroke(0)
-  let numPlayers = table.players.length-1;
-  let numLeft = Math.floor((numPlayers+1)/4);
-  let numTop = Math.floor((numPlayers+3)/4)+Math.floor((numPlayers+2)/4);
-  let numRight = Math.floor((numPlayers)/4);
-  let cardScreenRatio = .08;
-  let cardWidth = cardScreenRatio*CANVAS_WIDTH
-  let cardHeight = cardWidth * CARD_SIZE_RATIO;
-  for(let i = 0; i < numLeft; i++){
-    let x = 0;
-    let y = 0;
-    if(numLeft==1){
-      y = CANVAS_HEIGHT/2-cardWidth;
-    } else {
-      y = CANVAS_HEIGHT/4-cardWidth+i*CANVAS_HEIGHT/2;
-    }
-    rect(x,y,cardHeight,cardWidth,cardWidth*.1)
-    rect(x,y+cardWidth,cardHeight,cardWidth,cardWidth*.1)
-  }
-  for(let i = 0; i < numTop; i++){
-    let x = CANVAS_WIDTH-cardHeight;
-    let y = 0;
-    if(numTop%2==1){
-      x = CANVAS_WIDTH/4-cardWidth+(Math.floor(i+(4-numTop)/2))*CANVAS_WIDTH/4;
-    } else {
-      x = CANVAS_WIDTH/5-cardWidth+(Math.floor(i+(4-numTop)/2))*CANVAS_WIDTH/5;
-    }
-    rect(x,y,cardWidth,cardHeight,cardWidth*.1)
-    rect(x+cardWidth,y,cardWidth,cardHeight,cardWidth*.1)
-  }
-  for(let i = 0; i < numRight; i++){
-    let x = CANVAS_WIDTH-cardHeight;
-    let y = 0;
-    if(numRight==1){
-      y = CANVAS_HEIGHT/2-cardWidth;
-    } else {
-      y = CANVAS_HEIGHT/4-cardWidth+i*CANVAS_HEIGHT/2;
-    }
-    rect(x,y,cardHeight,cardWidth,cardWidth*.1)
-    rect(x,y+cardWidth,cardHeight,cardWidth,cardWidth*.1)
-  }
-
-}
-
-function drawPlayer(){
-  drawCards();
-  drawBetting();
 }
 
 function drawCards(){
@@ -165,13 +109,14 @@ function drawCards(){
   }
 }
 
-function drawCard(suit,value,x,y,width,height){
+function drawCard(suit,value,x,y,width,height,orientation){
   let suitSize = .1
   let valueSize = .1
   let borderSize = .1
   fill(200)
   stroke(0)
   rect(x,y,width,height,width*borderSize)
+  if(!suit || !value){return}
   drawSuit(suit,x+width*borderSize,y+height*(borderSize+valueSize),suitSize*width,suitSize*height)
   drawSuit(suit,x+width*(1-suitSize-borderSize),y+height*(1-suitSize-borderSize-valueSize),suitSize*width,suitSize*height)
   drawValue(value,x+width*borderSize,y+height*(borderSize),valueSize*width,valueSize*height)
@@ -316,41 +261,24 @@ class OtherPlayers{
     let numLeft = Math.floor((numPlayers+1)/4);
     let numTop = Math.floor((numPlayers+3)/4)+Math.floor((numPlayers+2)/4);
     let numRight = Math.floor((numPlayers)/4);
-    let cardScreenRatio = .08;
-    let cardWidth = cardScreenRatio*this.width
-    let cardHeight = cardWidth * CARD_SIZE_RATIO;
-    for(let i = 0; i < numLeft; i++){
-      let x = 0;
-      let y = 0;
-      if(numLeft==1){
-        y = this.height/2-cardWidth;
-      } else {
-        y = this.height/4-cardWidth+i*this.height/2;
+    let cardWidth = Math.min((this.height-this.heightInset)/(numLeft+.01),this.width/(numTop+.01),(this.height-this.heightInset)/(numRight+.01))/4
+    let cardHeight = Math.min(this.widthInset,this.heightInset)
+    cardWidth = Math.min(cardWidth,cardHeight/CARD_SIZE_RATIO)
+    cardHeight = cardWidth*CARD_SIZE_RATIO
+    let currentPlayerIndex = 0
+    for(let i = 0; i < table.players.length; i++){
+      if(table.players[i].socketId == socket.id){
+        currentPlayerIndex = i
       }
-      rect(x,y,cardHeight,cardWidth,cardWidth*.1)
-      rect(x,y+cardWidth,cardHeight,cardWidth,cardWidth*.1)
+    }
+    for(let i = 0; i < numLeft; i++){
+      drawOtherPlayer(this.x,this.y+this.heightInset+i*(this.height-this.heightInset)/numLeft,this.widthInset,(this.height-this.heightInset)/numLeft,cardWidth,cardHeight,(currentPlayerIndex+(numLeft-i-1)+1)%table.players.length,"left")
     }
     for(let i = 0; i < numTop; i++){
-      let x = this.width-cardHeight;
-      let y = 0;
-      if(numTop%2==1){
-        x = this.width/4-cardWidth+(Math.floor(i+(4-numTop)/2))*this.width/4;
-      } else {
-        x = this.width/5-cardWidth+(Math.floor(i+(4-numTop)/2))*this.width/5;
-      }
-      rect(x,y,cardWidth,cardHeight,cardWidth*.1)
-      rect(x+cardWidth,y,cardWidth,cardHeight,cardWidth*.1)
+      drawOtherPlayer(this.x+i*(this.width)/numTop,this.y,this.width/numTop,this.heightInset,cardWidth,cardHeight,(currentPlayerIndex+numLeft+i+1)%table.players.length,"top")
     }
     for(let i = 0; i < numRight; i++){
-      let x = this.width-cardHeight;
-      let y = 0;
-      if(numRight==1){
-        y = this.height/2-cardWidth;
-      } else {
-        y = this.height/4-cardWidth+i*this.height/2;
-      }
-      rect(x,y,cardHeight,cardWidth,cardWidth*.1)
-      rect(x,y+cardWidth,cardHeight,cardWidth,cardWidth*.1)
+      drawOtherPlayer(this.x+this.width-this.widthInset,this.y+this.heightInset+i*(this.height-this.heightInset)/numLeft,this.widthInset,(this.height-this.heightInset)/numLeft,cardWidth,cardHeight,(currentPlayerIndex+numLeft+numTop+i+1)%table.players.length,"right")
     }
   }
 
@@ -366,6 +294,53 @@ class OtherPlayers{
 
 }
 
+function drawOtherPlayer(x,y,width,height,cardWidth,cardHeight,playerIndex,orientation){
+  let player = table.players[playerIndex]
+  let insetRatio = .05
+  if(player.isTurn){
+    fill([50,100,50])
+  } else if(player.inHand){
+    fill([100,70,50])
+  } else if(!player.inHand){
+    fill(150)
+  }
+  rect(x,y,width,height)
+  fill(255)
+  // noStroke()
+  rect(x+width*insetRatio,y+height*insetRatio,width*(1-2*insetRatio),height*(1-2*insetRatio))
+  stroke(0)
+  fill(0)
+  if(orientation=="left"){
+    text(player.name,x,y)
+    text("Stack: "+player.currentBet,x,y+height/2/4)
+    text("Current Bet: "+player.currentBet,x,y+height/2*2/4)
+    text("Total Bet: "+player.totalBet,x,y+height/2*3/4)
+    drawCard(player.cards[0]?player.cards[0].suit:player.cards[0],player.cards[0]?player.cards[0].value:player.cards[0],
+             x,y+height/2,cardHeight,cardWidth,orientation)
+    drawCard(player.cards[1]?player.cards[1].suit:player.cards[1],player.cards[1]?player.cards[1].value:player.cards[1],
+             x,y+height/2+cardWidth,cardHeight,cardWidth,orientation)
+  } else if(orientation=="top"){
+    text(player.name,x+width/2,y)
+    text("Stack: "+player.currentBet,x+width/2,y+height/4)
+    text("Current Bet: "+player.currentBet,x+width/2,y+height*2/4)
+    text("Total Bet: "+player.totalBet,x+width/2,y+height*3/4)
+    drawCard(player.cards[0]?player.cards[0].suit:player.cards[0],player.cards[0]?player.cards[0].value:player.cards[0],
+             x+width/2-2*cardWidth,y,cardWidth,cardHeight,orientation)
+    drawCard(player.cards[1]?player.cards[1].suit:player.cards[1],player.cards[1]?player.cards[1].value:player.cards[1],
+             x+width/2-cardWidth,y,cardWidth,cardHeight,orientation)
+  } else if(orientation=="right"){
+    text(player.name,x,y)
+    text("Stack: "+player.currentBet,x,y+height/2/4)
+    text("Current Bet: "+player.currentBet,x,y+height/2*2/4)
+    text("Total Bet: "+player.totalBet,x,y+height/2*3/4)
+    drawCard(player.cards[0]?player.cards[0].suit:player.cards[0],player.cards[0]?player.cards[0].value:player.cards[0],
+             x+width-cardHeight,y+height/2,cardHeight,cardWidth,orientation)
+    drawCard(player.cards[1]?player.cards[1].suit:player.cards[1],player.cards[1]?player.cards[1].value:player.cards[1],
+             x+width-cardHeight,y+height/2+cardWidth,cardHeight,cardWidth,orientation)
+  }
+}
+
+
 class SharedTable {
 
   constructor(x,y,width,height){
@@ -374,10 +349,14 @@ class SharedTable {
     this.width = width
     this.height = height
     this.tableCards = new TableCards(this.x,this.y,this.width,this.height*2/3)
+    this.tablePots = new TablePots(this.x,this.y+this.height*2/3,this.width,this.height/6)
+    this.tableInfo = new TableInfo(this.x,this.y+this.height*(2/3+1/6),this.width,this.height/6)
   }
 
   draw(){
     this.tableCards.draw()
+    this.tablePots.draw()
+    this.tableInfo.draw()
   }
 
   isMouseWithin(){
@@ -387,6 +366,8 @@ class SharedTable {
   handleMouseClick(){
     if(this.isMouseWithin()){
       this.tableCards.handleMouseClick()
+      this.tablePots.handleMouseClick()
+      this.tableInfo.handleMouseClick()
     }
   }
 
@@ -438,6 +419,66 @@ class TableCards {
 
 }
 
+class TableInfo {
+
+  constructor(x,y,width,height){
+    this.x = x
+    this.y = y
+    this.width = width
+    this.height = height
+  }
+
+  draw(){
+    text("Big Blind: "+table.bigBlind,this.x,this.y);
+    text("Small Blind: "+table.smallBlind,this.x,this.y+this.height/3);
+  }
+
+  isMouseWithin(){
+    return isMouseWithin(this.x,this.y,this.width,this.height)
+  }
+
+  handleMouseClick(){
+    if(this.isMouseWithin()){
+
+    }
+  }
+
+}
+
+class TablePots {
+
+  constructor(x,y,width,height){
+    this.x = x
+    this.y = y
+    this.width = width
+    this.height = height
+  }
+
+  draw(){
+    fill(0)
+    for(let i = 0; i < table.pots.pots.length; i++){
+      text("Pot "+(i+1)+": "+table.pots.pots[i][1],this.x+this.width/table.pots.pots.length*i,this.y)
+    }
+    let roundBet = 0
+    for(let i = 0; i < table.players.length; i++){
+      roundBet += table.players[i].currentBet
+    }
+    text("Total bets in round: "+roundBet,this.x,this.y+this.height/2)
+    
+  }
+
+  isMouseWithin(){
+    return isMouseWithin(this.x,this.y,this.width,this.height)
+  }
+
+  handleMouseClick(){
+    if(this.isMouseWithin()){
+
+    }
+  }
+
+}
+
 class PlayerUI {
 
   constructor(x,y,width,height){
@@ -445,13 +486,29 @@ class PlayerUI {
     this.y = y
     this.width = width
     this.height = height
-    this.playerCards = new PlayerCards(x,y,width/2,height)
-    this.bettingUI = new BettingUI(x+width/2,y,width/2,height)
+    this.playerStats = new PlayerInfo(x,y,width,height/3)
+    this.playerCards = new PlayerCards(x,y+height/3,width/2,height*2/3)
+    this.bettingUI = new BettingUI(x+width/2,y+height/3,width/2,height*2/3)
   }
 
   draw(){
-    this.playerCards.draw()
     
+    let insetRatio = .05
+    if(player.isTurn){
+      fill([50,100,50])
+    } else if(player.inHand){
+      fill([100,70,50])
+    } else if(!player.inHand){
+      fill(150)
+    }
+    rect(this.x,this.y,this.width,this.height)
+    fill(255)
+    // noStroke()
+    rect(this.x+this.width*insetRatio,this.y+this.height*insetRatio,this.width*(1-2*insetRatio),this.height*(1-2*insetRatio))
+    stroke(0)
+    fill(0)
+    this.playerStats.draw()
+    this.playerCards.draw()
     if(player.isTurn){
       this.bettingUI.draw()
     }
@@ -463,12 +520,45 @@ class PlayerUI {
 
   handleMouseClick(){
     if(this.isMouseWithin()){
+      this.playerStats.handleMouseClick()
       this.playerCards.handleMouseClick()
       if(player.isTurn){
         this.bettingUI.handleMouseClick()
       }
     }
   }
+}
+
+class PlayerInfo {
+
+  constructor(x,y,width,height){
+    this.x = x
+    this.y = y
+    this.width = width
+    this.height = height
+  }
+
+  draw(){
+    if(!player || !player.cards){
+      return
+    }
+    fill(0)
+    text(player.name,this.x,this.y);
+    text("Stack: "+player.stack,this.x,this.y+this.height/4);
+    text("Current Bet: "+player.currentBet,this.x,this.y+this.height*2/4);
+    text("Total Bet: "+player.totalBet,this.x,this.y+this.height*3/4);
+  }
+
+  isMouseWithin(){
+    return isMouseWithin(this.x,this.y,this.width,this.height)
+  }
+
+  handleMouseClick(){
+    if(this.isMouseWithin()){
+
+    }
+  }
+
 }
 
 class PlayerCards {
@@ -527,16 +617,24 @@ class BettingUI {
       console.log("Folded")
     })
     this.call = new Button(x+width/3,y,width/3,height,"Call",()=>{
-      player.stack -= (table.currentBet - player.currentBet)
-      player.currentBet = table.currentBet
+      if(table.currentBet-player.currentBet > player.stack){
+        player.currentBet += player.stack
+        player.stack -= player.stack
+        player.totalBet += player.stack;
+      } else {
+        player.stack -= table.currentBet-player.currentBet
+        player.totalBet += table.currentBet-player.currentBet
+        player.currentBet = table.currentBet
+      }
       socket.emit('player',player)
       console.log("Called "+player.currentBet)
     })
     // let slider = new Slider(x+width*2/3,y+height*3/4,width/3,height/4,table.currentBet+table.bigBlind,player.stack)
-    let slider = new Slider(x+width*2/3,y+height*3/4,width/3,height/4,table.currentBet,player.stack)
+    let slider = new Slider(x+width*2/3,y+height*3/4,width/3,height/4,table.currentBet+table.bigBlind,player.stack)
     this.slider = slider
     this.raise = new Button(x+width*2/3,y,width/3,height*3/4,"Raise",()=>{
       player.stack -= (slider.getValue() - player.currentBet)
+      player.totalBet += (slider.getValue() - player.currentBet);
       player.currentBet = slider.getValue()
       socket.emit('player',player)
       console.log("Raised "+player.currentBet)
