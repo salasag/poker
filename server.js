@@ -160,7 +160,6 @@ class Table {
 	}
 
 	updateAllPlayers(){
-		console.log("Updating players")
 		let cards = []
 		let tempDeck = this.deck;
 		this.deck = []
@@ -172,6 +171,29 @@ class Table {
 			this.players[i].cards = cards[i]
 			io.to(`${this.players[i].socketId}`).emit('table',this)
 			this.players[i].cards = []
+		}
+		for(let i = 0; i < this.players.length; i++){
+			this.players[i].cards = cards[i]
+		}
+		this.deck = tempDeck
+	}
+
+	updateShowdownHands(){
+		let cards = []
+		let tempDeck = this.deck;
+		this.deck = []
+		for(let i = 0; i < this.players.length; i++){
+			cards.push(JSON.parse(JSON.stringify(this.players[i].cards)))
+			if(!this.players[i].inHand){
+				this.players[i].cards = []
+			}
+		}
+		for(let i = 0; i < this.players.length; i++){
+			this.players[i].cards = cards[i]
+			io.to(`${this.players[i].socketId}`).emit('table',this)
+			if(!this.players[i].inHand){
+				this.players[i].cards = []
+			}
 		}
 		for(let i = 0; i < this.players.length; i++){
 			this.players[i].cards = cards[i]
@@ -196,15 +218,26 @@ class Table {
 				numInHand++;
 			}
 		}
-		console.log("Checking if one player is left", numInHand)
+		// console.log("Checking if one player is left", numInHand)
 		return numInHand == 1;
 
 	}
 
+	isOneAllIn(){
+		let numInHand = 0;
+		for(let i = 0; i < this.players.length; i++){
+			if(this.players[i].stack != 0 && this.players[i].inHand){
+				numInHand++;
+			}
+		}
+		console.log("Checking if one player is left not all in ", numInHand)
+		return numInHand == 1;
+	}
+
 	async performBettingRound(i){
-		i = (i+1)%this.players.length
+		i = (i)%this.players.length
 		let numTurns = 0
-		while((!this.isPotGood() || numTurns < this.players.length) && !this.isOneLeft()){ // is pot good doesn't account for BB check
+		while((!this.isPotGood() || numTurns < this.players.length) && !this.isOneLeft() && !this.isOneAllIn()){ // is pot good doesn't account for BB check
 			await this.players[i].getBet()
 			// console.log("Player response: ",this.players[i])
 			if(this.players[i].currentBet == this.currentBet || (this.players[i].currentBet < this.currentBet && this.players[i].stack == 0)){ // Call
@@ -213,11 +246,9 @@ class Table {
 			} else if (this.players[i].currentBet < this.currentBet){ // Fold
 				this.players[i].inHand = false
 				console.log("Player "+this.players[i].socketId+" folded")
-				// Maybe check if it's over
 			} else { // Raise
 				console.log("Player "+this.players[i].socketId+" raised to "+this.players[i].currentBet)
 				this.currentBet = this.players[i].currentBet
-				// Maybe shift players here idk
 			}
 			i = (i+1)%this.players.length
 			numTurns++;
@@ -363,16 +394,23 @@ class Table {
 				hands.push([i,hand])
 			}
 		}
-		hands = sortHands(hands)
+		sortHands(hands)
 		console.log(JSON.stringify(hands))
+		console.log(JSON.stringify(this.pots))
 		let i = 0;
 		while(this.pots.getTotalPotAmount()!=0){
 			let winner = this.players[hands[i][0]];
-			console.log("Player "+winner.socketId+" has won!")
-			winner.stack += this.pots.payoutWinner(winner.totalBet);
+			console.log("Player "+winner.name+" has won! With totalBet: "+winner.totalBet+" and currentBet: "+winner.currentBet)
+			let payout = this.pots.payoutWinner(winner.totalBet);
+			console.log(payout)
+			winner.stack += payout
 			i++;
 		}
-		this.dealCards()
+		if(this.pots.getTotalPotAmount()!=0){
+			console.log("showdown: People not qualified for all the money")
+		}
+		this.updateShowdownHands()
+		setTimeout(this.dealCards.bind(this),5*1000)
 	}
 
 }
@@ -516,7 +554,6 @@ function sortHands(hands){
 	sortCards(hands)
 	getScoresForAllHands(hands)
 	hands.sort(compareScores)
-	return hands
 }
 
 function sortCards(hands){
@@ -535,10 +572,10 @@ function getScoresForAllHands(hands){
 	}
 }
 
-function compareScores(score1,score2){ // Ret + if score2 is better
-	for(let i = 0; i < score1.length; i++){
-		if(score1[i] != score2[i]){
-			score2[i] - score1[i]
+function compareScores(hand1,hand2){ // Ret + if score2 is better
+	for(let i = 0; i < hand1[2].length; i++){
+		if(hand1[2][i] != hand2[2][i]){
+			return hand2[2][i] - hand1[2][i]
 		}
 	}
 }
@@ -585,10 +622,10 @@ class Pots {
 		for(let i = 0; i < players.length; i++){
 			let player = players[i]
 			allInPotRecent += player.currentBet
-			player.currentBet = 0
 			if(stakeNeeded < player.currentBet){
 				stakeNeeded = player.currentBet
 			}
+			player.currentBet = 0
 			if(stakeNeeded != 0 && player.currentBet != 0 && player.currentBet != stakeNeeded){
 				console.log("addBettingRoundToPot: Potential error bets not uniform and no all in")
 			}

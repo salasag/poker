@@ -312,7 +312,7 @@ function drawOtherPlayer(x,y,width,height,cardWidth,cardHeight,playerIndex,orien
   fill(0)
   if(orientation=="left"){
     text(player.name,x,y)
-    text("Stack: "+player.currentBet,x,y+height/2/4)
+    text("Stack: "+player.stack,x,y+height/2/4)
     text("Current Bet: "+player.currentBet,x,y+height/2*2/4)
     text("Total Bet: "+player.totalBet,x,y+height/2*3/4)
     drawCard(player.cards[0]?player.cards[0].suit:player.cards[0],player.cards[0]?player.cards[0].value:player.cards[0],
@@ -321,7 +321,7 @@ function drawOtherPlayer(x,y,width,height,cardWidth,cardHeight,playerIndex,orien
              x,y+height/2+cardWidth,cardHeight,cardWidth,orientation)
   } else if(orientation=="top"){
     text(player.name,x+width/2,y)
-    text("Stack: "+player.currentBet,x+width/2,y+height/4)
+    text("Stack: "+player.stack,x+width/2,y+height/4)
     text("Current Bet: "+player.currentBet,x+width/2,y+height*2/4)
     text("Total Bet: "+player.totalBet,x+width/2,y+height*3/4)
     drawCard(player.cards[0]?player.cards[0].suit:player.cards[0],player.cards[0]?player.cards[0].value:player.cards[0],
@@ -330,7 +330,7 @@ function drawOtherPlayer(x,y,width,height,cardWidth,cardHeight,playerIndex,orien
              x+width/2-cardWidth,y,cardWidth,cardHeight,orientation)
   } else if(orientation=="right"){
     text(player.name,x,y)
-    text("Stack: "+player.currentBet,x,y+height/2/4)
+    text("Stack: "+player.stack,x,y+height/2/4)
     text("Current Bet: "+player.currentBet,x,y+height/2*2/4)
     text("Total Bet: "+player.totalBet,x,y+height/2*3/4)
     drawCard(player.cards[0]?player.cards[0].suit:player.cards[0],player.cards[0]?player.cards[0].value:player.cards[0],
@@ -616,7 +616,7 @@ class BettingUI {
       socket.emit('player',player)
       console.log("Folded")
     })
-    this.call = new Button(x+width/3,y,width/3,height,"Call",()=>{
+    this.call = new Button(x+width/3,y,width/3,height,table.currentBet==player.currentBet?"Check":"Call",()=>{
       if(table.currentBet-player.currentBet > player.stack){
         player.currentBet += player.stack
         player.stack -= player.stack
@@ -629,8 +629,7 @@ class BettingUI {
       socket.emit('player',player)
       console.log("Called "+player.currentBet)
     })
-    // let slider = new Slider(x+width*2/3,y+height*3/4,width/3,height/4,table.currentBet+table.bigBlind,player.stack)
-    let slider = new Slider(x+width*2/3,y+height*3/4,width/3,height/4,table.currentBet+table.bigBlind,player.stack)
+    let slider = new Slider(x+width*2/3,y+height*3/4,width/3,height/4,(table.currentBet+table.bigBlind)>player.stack?1:table.currentBet+table.bigBlind,player.stack)
     this.slider = slider
     this.raise = new Button(x+width*2/3,y,width/3,height*3/4,"Raise",()=>{
       player.stack -= (slider.getValue() - player.currentBet)
@@ -643,10 +642,14 @@ class BettingUI {
 
   draw(){
     textSize(10)
-    this.fold.draw()
+    if(table.currentBet != 0){
+      this.fold.draw()
+    }
     this.call.draw()
-    this.raise.draw()
-    this.slider.draw()
+    if(player.stack > table.currentBet){
+      this.raise.draw()
+      this.slider.draw()
+    }
   }
 
   isMouseWithin(){
@@ -655,10 +658,14 @@ class BettingUI {
 
   handleMouseClick(){
     if(this.isMouseWithin()){
-      this.fold.handleMouseClick()
+      if(table.currentBet != 0){
+        this.fold.handleMouseClick()
+      }
       this.call.handleMouseClick()
-      this.raise.handleMouseClick()
-      this.slider.handleMouseClick()
+      if(player.stack > table.currentBet){
+        this.raise.handleMouseClick()
+        this.slider.handleMouseClick()
+      }
     }
   }
 }
@@ -700,16 +707,17 @@ class Slider {
     this.y = y
     this.width = width
     this.height = height
-    this.bottomValue = bottomValue
+    this.bottomValue = bottomValue<=0?1:bottomValue
     this.topValue = topValue
     this.currentValue = bottomValue;
+    this.mouseX = x
   }
 
   draw(){
     fill(255)
     rect(this.x,this.y,this.width,this.height)
     fill(200)
-    rect(this.x+this.width*(this.currentValue-this.bottomValue)/(this.topValue-this.bottomValue),this.y,this.width*(1-(this.currentValue-this.bottomValue)/(this.topValue-this.bottomValue)),this.height)
+    rect(this.mouseX,this.y,this.width+this.x-this.mouseX,this.height)
     fill(0)
     text("Raise: "+this.currentValue,this.x,this.y)
   }
@@ -721,10 +729,12 @@ class Slider {
   handleMouseClick(){
     if(this.isMouseWithin()){
       if((mouseX-this.x)/this.width< 0.5){
-        this.currentValue = Math.floor(Math.floor((mouseX-this.x)/this.width*50)/50*(this.topValue-this.bottomValue)+this.bottomValue)
+        this.currentValue = Math.floor(this.bottomValue*Math.pow(this.topValue/(this.bottomValue),Math.floor((mouseX-this.x)/this.width*25)/25))
       } else {
-        this.currentValue = Math.ceil(Math.ceil((mouseX-this.x)/this.width*50)/50*(this.topValue-this.bottomValue)+this.bottomValue)
+        this.currentValue = Math.ceil(this.bottomValue*Math.pow(this.topValue/(this.bottomValue),Math.ceil((mouseX-this.x)/this.width*25)/25))
       }
+      this.currentValue = Math.max(0,Math.min(player.stack,this.currentValue))
+      this.mouseX = mouseX
     }
   }
 
