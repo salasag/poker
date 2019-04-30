@@ -25,6 +25,9 @@ var IMAGE_SPADE;
 var FONT;
 var CARD_SIZE_RATIO = 8/5;
 var messages = [];
+var timeLeft = 0;
+var timeMax = 1;
+var timeStart = 0;
 
 
 function preload(){
@@ -65,6 +68,9 @@ function updateTableInfo(data){
   console.log(data)
   if(!table){} // On init
   table = data
+  timeLeft = table.timeLeft-1000
+  timeMax = table.timeLeft-1000
+  timeStart = performance.now()
   for(let i = 0; i < table.players.length; i++){
     if(table.players[i].socketId == socket.id){
       player = table.players[i];
@@ -647,11 +653,12 @@ class BettingUI {
     this.y = y
     this.width = width
     this.height = height
-    this.fold = new Button(x,y,width/3,height,"Fold",()=>{
+    this.timer = new Timer(x,y,width,height/5,timeStart,timeMax)
+    this.fold = new Button(x,y+height/5,width/3,height*4/5,"Fold",()=>{
       socket.emit('player',player)
       console.log("Folded")
     })
-    this.call = new Button(x+width/3,y,width/3,height,table.currentBet==player.currentBet?"Check":"Call",()=>{
+    this.call = new Button(x+width/3,y+height/5,width/3,height*4/5,table.currentBet==player.currentBet?"Check":"Call",()=>{
       if(table.currentBet-player.currentBet > player.stack){
         player.currentBet += player.stack
         player.stack -= player.stack
@@ -664,9 +671,9 @@ class BettingUI {
       socket.emit('player',player)
       console.log("Called "+player.currentBet)
     })
-    let slider = new Slider(x+width*2/3,y+height*3/4,width/3,height/4,(table.currentBet+table.bigBlind)>player.stack?1:table.currentBet+table.bigBlind,player.stack+player.currentBet)
+    let slider = new Slider(x+width*2/3,y+height*4/5,width/3,height/5,(table.currentBet+table.bigBlind)>player.stack?1:table.currentBet+table.bigBlind,player.stack+player.currentBet)
     this.slider = slider
-    this.raise = new Button(x+width*2/3,y,width/3,height*3/4,"Raise",()=>{
+    this.raise = new Button(x+width*2/3,y+height/5,width/3,height*(1-1/5-1/5),"Raise",()=>{
       player.stack -= (slider.getValue() - player.currentBet)
       player.totalBet += (slider.getValue() - player.currentBet);
       player.currentBet = slider.getValue()
@@ -677,6 +684,7 @@ class BettingUI {
 
   draw(){
     textSize(10)
+    this.timer.draw()
     if(table.currentBet != 0){
       this.fold.draw()
     }
@@ -693,6 +701,7 @@ class BettingUI {
 
   handleMouseClick(){
     if(this.isMouseWithin()){
+      this.timer.handleMouseClick()
       if(table.currentBet != 0){
         this.fold.handleMouseClick()
       }
@@ -701,6 +710,38 @@ class BettingUI {
         this.raise.handleMouseClick()
         this.slider.handleMouseClick()
       }
+    }
+  }
+}
+
+class Timer {
+
+  constructor(x,y,width,height,timeStart,timeMax){
+    this.x = x
+    this.y = y
+    this.width = width
+    this.height = height
+    this.timeStart = timeStart
+    this.timeMax = timeMax
+  }
+  
+  draw(){
+    let timeLeft = timeMax-(performance.now()-timeStart)
+    fill(255)
+    rect(this.x,this.y,this.width,this.height)
+    fill([255-155*(timeLeft/this.timeMax),100+155*(timeLeft/this.timeMax),100])
+    rect(this.x,this.y,this.width*timeLeft/this.timeMax,this.height)
+    fill(0)
+    text("Time left: "+(timeLeft/1000).toFixed(2)+" seconds",this.x,this.y)
+  }
+
+  isMouseWithin(){
+    return isMouseWithin(this.x,this.y,this.width,this.height)
+  }
+
+  handleMouseClick(){
+    if(this.isMouseWithin()){
+
     }
   }
 }
@@ -744,7 +785,6 @@ class Slider {
     this.height = height
     this.bottomValue = bottomValue<=0?1:bottomValue
     this.topValue = topValue
-    console.log(this.topValue)
     this.currentValue = bottomValue;
     this.mouseX = x
   }

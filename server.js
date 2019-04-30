@@ -358,6 +358,7 @@ class Table {
 		console.log("Dealing Turn")
 		this.deck.dealCard()
 		this.cards.push(this.deck.dealCard())
+		this.updateAllPlayers()
 		setTimeout(this.postTurnBetting.bind(this),1000)
 	}
 
@@ -375,6 +376,7 @@ class Table {
 		console.log("Dealing River")
 		this.deck.dealCard()
 		this.cards.push(this.deck.dealCard())
+		this.updateAllPlayers()
 		setTimeout(this.postRiverBetting.bind(this),1000)
 	}
 
