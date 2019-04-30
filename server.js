@@ -26,6 +26,7 @@ var VALUES_MAP = new Map([["2",2],
 						["A",14],])
 var SUITS  = ["Spades","Clubs","Hearts","Diamonds"]
 var TABLE;
+var STARTING_STACK_AMOUNT = 10000;
 
 // https://stackoverflow.com/questions/19608923/socket-io-socket-on-wait-for-promise
 // https://stackoverflow.com/questions/51488022/how-to-make-javascript-execution-wait-for-socket-on-function-response
@@ -45,6 +46,10 @@ function newConnection(socket){
 		TABLE.queuePlayerRemoval(socket.id)
 		console.log('user disconnected ' + socket.id);
 	});
+}
+
+function sendMessage(message){
+	io.emit('message',message)
 }
 
 class Table {
@@ -203,62 +208,62 @@ class Table {
 
 	isPotGood(){
 		for(let i = 0; i < this.players.length; i++){
-			if(this.players[i].inHand && this.players[i].currentBet != this.currentBet){
+			if(this.players[i].inHand && (this.players[i].currentBet != this.currentBet && this.players[i].stack!=0)){
 				return false
 			}
 		}
-		console.log("Pot is good")
 		return true;
 	}
 
-	isOneLeft(){
+	playersInHand(){
 		let numInHand = 0;
 		for(let i = 0; i < this.players.length; i++){
 			if(this.players[i].inHand){
 				numInHand++;
 			}
 		}
-		// console.log("Checking if one player is left", numInHand)
-		return numInHand == 1;
+		return numInHand;
 
 	}
 
-	isOneAllIn(){
+	playersAllIn(){
 		let numInHand = 0;
 		for(let i = 0; i < this.players.length; i++){
-			if(this.players[i].stack != 0 && this.players[i].inHand){
+			if(this.players[i].stack == 0 && this.players[i].inHand){
 				numInHand++;
 			}
 		}
-		console.log("Checking if one player is left not all in ", numInHand)
-		return numInHand == 1;
+		return numInHand;
 	}
 
 	async performBettingRound(i){
 		i = (i)%this.players.length
 		let numTurns = 0
-		while((!this.isPotGood() || numTurns < this.players.length) && !this.isOneLeft() && !this.isOneAllIn()){ // is pot good doesn't account for BB check
-			await this.players[i].getBet()
-			// console.log("Player response: ",this.players[i])
-			if(this.players[i].currentBet == this.currentBet || (this.players[i].currentBet < this.currentBet && this.players[i].stack == 0)){ // Call
-				console.log("Player "+this.players[i].socketId+" called "+this.players[i].currentBet)
-
-			} else if (this.players[i].currentBet < this.currentBet){ // Fold
-				this.players[i].inHand = false
-				console.log("Player "+this.players[i].socketId+" folded")
-			} else { // Raise
-				console.log("Player "+this.players[i].socketId+" raised to "+this.players[i].currentBet)
-				this.currentBet = this.players[i].currentBet
+		while((!this.isPotGood() || numTurns < this.players.length) && (this.playersInHand()>1) && ((this.playersInHand()-this.playersAllIn())>1 || !this.isPotGood())){
+			if(this.players[i].inHand && this.players[i].stack != 0){
+				await this.players[i].getBet() // Maybe check that player is in hand...
+				// console.log("Player response: ",this.players[i])
+				if(this.players[i].currentBet == this.currentBet || (this.players[i].currentBet < this.currentBet && this.players[i].stack == 0)){ // Call
+					console.log("Player "+this.players[i].name+" called "+this.players[i].currentBet)
+					sendMessage("Player "+this.players[i].name+(this.players[i].currentBet==0?" checked":" called "+this.players[i].currentBet))
+				} else if (this.players[i].currentBet < this.currentBet && this.players[i].stack != 0){ // Fold
+					this.players[i].inHand = false
+					console.log("Player "+this.players[i].name+" folded")
+					sendMessage("Player "+this.players[i].name+" folded")
+				} else { // Raise
+					console.log("Player "+this.players[i].name+" raised to "+this.players[i].currentBet)
+					sendMessage("Player "+this.players[i].name+" raised to "+this.players[i].currentBet)
+					this.currentBet = this.players[i].currentBet
+				}
 			}
 			i = (i+1)%this.players.length
 			numTurns++;
 		}
-		// Reset betting stuff
 		this.pots.addBettingRoundToPot()
 	}
 
 	handleOnePersonRemaining(){
-		if(this.isOneLeft()){
+		if(this.playersInHand() == 1){
 			let player;
 			for(let i = 0; i < this.players.length; i++){
 				if(this.players[i].inHand){
@@ -290,6 +295,10 @@ class Table {
 			this.players[i].totalBet = 0;
 			this.players[i].inHand = true;
 			this.players[i].isTurn = false;
+			if(this.players[i].stack == 0){
+				sendMessage("Player "+this.players[i].name+" busted. Rebuying for "+STARTING_STACK_AMOUNT)
+				this.players[i].stack = STARTING_STACK_AMOUNT
+			}
 		}
 	}
 
@@ -394,16 +403,21 @@ class Table {
 				hands.push([i,hand])
 			}
 		}
-		sortHands(hands)
+		hands = sortHands(hands)
 		console.log(JSON.stringify(hands))
 		console.log(JSON.stringify(this.pots))
 		let i = 0;
-		while(this.pots.getTotalPotAmount()!=0){
-			let winner = this.players[hands[i][0]];
-			console.log("Player "+winner.name+" has won! With totalBet: "+winner.totalBet+" and currentBet: "+winner.currentBet)
-			let payout = this.pots.payoutWinner(winner.totalBet);
-			console.log(payout)
-			winner.stack += payout
+		while(this.pots.getTotalPotAmount()!=0 && i < hands.length){ // TODO: Add split ties
+			let tiedHands = hands[i]
+			let payoutPerPerson = 0;
+			for(let j = 0; j < tiedHands.length; j++){
+				let winner = this.players[tiedHands[j][0]];
+				let payout = this.pots.payoutWinner(winner.totalBet);
+				console.log("Player "+winner.name+" has won! With totalBet: "+winner.totalBet+" and currentBet: "+winner.currentBet)
+				payoutPerPerson += Math.ceil(payout/(tiedHands.length-j))
+				console.log(payout)
+				winner.stack += payoutPerPerson
+			}
 			i++;
 		}
 		if(this.pots.getTotalPotAmount()!=0){
@@ -420,7 +434,7 @@ class Player {
 	constructor(socketId){
 		this.cards = []
 		this.socketId = socketId
-		this.stack = 10000
+		this.stack = STARTING_STACK_AMOUNT
 		this.currentBet = 0
 		this.totalBet = 0
 		this.inHand = false
@@ -554,6 +568,7 @@ function sortHands(hands){
 	sortCards(hands)
 	getScoresForAllHands(hands)
 	hands.sort(compareScores)
+	return mergeTies(hands)
 }
 
 function sortCards(hands){
@@ -578,6 +593,32 @@ function compareScores(hand1,hand2){ // Ret + if score2 is better
 			return hand2[2][i] - hand1[2][i]
 		}
 	}
+	return 0
+}
+
+function mergeTies(hands){
+	console.log("Hands",JSON.stringify(hands))
+	let ret = []
+	let curTie = [hands[0]]
+	for(let i = 0; i < hands.length-1; i++){
+		if(compareScores(hands[i],hands[i+1])==0){
+			curTie.push(hands[i+1])
+		} else {
+			curTie.sort((hand1,hand2)=>{ // Sorts lowest payout qualification to highest
+				return TABLE.players[hand1[0]].totalBet - TABLE.players[hand2[0]].totalBet  
+			})
+			ret.push(curTie)
+			curTie = [hands[i+1]]
+		}
+	}
+	if(curTie.length!=0){
+		curTie.sort((hand1,hand2)=>{ // Sorts lowest payout qualification to highest
+			return TABLE.players[hand1[0]].totalBet - TABLE.players[hand2[0]].totalBet  
+		})
+		ret.push(curTie)
+	}
+	console.log("Ret",JSON.stringify(ret))
+	return ret
 }
 
 class Pots {
@@ -845,7 +886,7 @@ function getScoreStraight(hand){ // Ace
 		let value = VALUES_MAP.get(hand[i].value)
 		if(startValue == value+streak){
 			streak++
-			if(streak == 5 || (streak == 4 && VALUES_MAP.get(hand[0].value) == 14  && counts[j] == 2)){ // Account for wrapping
+			if(streak == 5 || (streak == 4 && VALUES_MAP.get(hand[0].value) == 14  && VALUES_MAP.get(hand[i].value) == 2)){ // Account for wrapping
 				score.push(4)
 				score.push(startValue)
 				break;

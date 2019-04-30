@@ -24,6 +24,7 @@ var IMAGE_HEART;
 var IMAGE_SPADE;
 var FONT;
 var CARD_SIZE_RATIO = 8/5;
+var messages = [];
 
 
 function preload(){
@@ -56,6 +57,7 @@ function setup(){
    //textFont(FONT)
    textAlign(LEFT, TOP);
    socket.on('table', updateTableInfo);
+   socket.on('message', addMessage);
    background(255)
 }
 
@@ -70,6 +72,13 @@ function updateTableInfo(data){
     }
   }
   tableView = new Table(0,0,CANVAS_WIDTH,CANVAS_HEIGHT)
+}
+
+function addMessage(message){
+  messages.push(message)
+  if(messages.length > 10){
+    messages.shift()
+  }
 }
 
 function mouseClicked() {
@@ -349,14 +358,16 @@ class SharedTable {
     this.width = width
     this.height = height
     this.tableCards = new TableCards(this.x,this.y,this.width,this.height*2/3)
-    this.tablePots = new TablePots(this.x,this.y+this.height*2/3,this.width,this.height/6)
-    this.tableInfo = new TableInfo(this.x,this.y+this.height*(2/3+1/6),this.width,this.height/6)
+    this.tablePots = new TablePots(this.x,this.y+this.height*2/3,this.width/2,this.height/6)
+    this.tableInfo = new TableInfo(this.x,this.y+this.height*(2/3+1/6),this.width/2,this.height/6)
+    this.tableMessages = new TableMessages(this.x+this.width/2,this.y+this.height*(2/3),this.width/2,this.height/3)
   }
 
   draw(){
     this.tableCards.draw()
     this.tablePots.draw()
     this.tableInfo.draw()
+    this.tableMessages.draw()
   }
 
   isMouseWithin(){
@@ -368,6 +379,7 @@ class SharedTable {
       this.tableCards.handleMouseClick()
       this.tablePots.handleMouseClick()
       this.tableInfo.handleMouseClick()
+      this.tableMessages.handleMouseClick()
     }
   }
 
@@ -429,8 +441,9 @@ class TableInfo {
   }
 
   draw(){
-    text("Big Blind: "+table.bigBlind,this.x,this.y);
-    text("Small Blind: "+table.smallBlind,this.x,this.y+this.height/3);
+    text("Current Bet: "+table.currentBet,this.x,this.y);
+    text("Big Blind: "+table.bigBlind,this.x,this.y+this.height/3);
+    text("Small Blind: "+table.smallBlind,this.x,this.y+this.height*2/3);
   }
 
   isMouseWithin(){
@@ -446,14 +459,12 @@ class TableInfo {
 }
 
 class TablePots {
-
   constructor(x,y,width,height){
     this.x = x
     this.y = y
     this.width = width
     this.height = height
   }
-
   draw(){
     fill(0)
     for(let i = 0; i < table.pots.pots.length; i++){
@@ -464,7 +475,6 @@ class TablePots {
       roundBet += table.players[i].currentBet
     }
     text("Total bets in round: "+roundBet,this.x,this.y+this.height/2)
-    
   }
 
   isMouseWithin(){
@@ -476,7 +486,32 @@ class TablePots {
 
     }
   }
+}
 
+class TableMessages {
+  constructor(x,y,width,height){
+    this.x = x
+    this.y = y
+    this.width = width
+    this.height = height
+  }
+
+  draw(){
+    fill(0)
+    for(let i = 0; i < messages.length; i++){
+      text(messages[i],this.x,this.y+this.height/messages.length*i)
+    }
+  }
+
+  isMouseWithin(){
+    return isMouseWithin(this.x,this.y,this.width,this.height)
+  }
+
+  handleMouseClick(){
+    if(this.isMouseWithin()){
+
+    }
+  }
 }
 
 class PlayerUI {
@@ -629,7 +664,7 @@ class BettingUI {
       socket.emit('player',player)
       console.log("Called "+player.currentBet)
     })
-    let slider = new Slider(x+width*2/3,y+height*3/4,width/3,height/4,(table.currentBet+table.bigBlind)>player.stack?1:table.currentBet+table.bigBlind,player.stack)
+    let slider = new Slider(x+width*2/3,y+height*3/4,width/3,height/4,(table.currentBet+table.bigBlind)>player.stack?1:table.currentBet+table.bigBlind,player.stack+player.currentBet)
     this.slider = slider
     this.raise = new Button(x+width*2/3,y,width/3,height*3/4,"Raise",()=>{
       player.stack -= (slider.getValue() - player.currentBet)
@@ -709,6 +744,7 @@ class Slider {
     this.height = height
     this.bottomValue = bottomValue<=0?1:bottomValue
     this.topValue = topValue
+    console.log(this.topValue)
     this.currentValue = bottomValue;
     this.mouseX = x
   }
@@ -733,7 +769,7 @@ class Slider {
       } else {
         this.currentValue = Math.ceil(this.bottomValue*Math.pow(this.topValue/(this.bottomValue),Math.ceil((mouseX-this.x)/this.width*25)/25))
       }
-      this.currentValue = Math.max(0,Math.min(player.stack,this.currentValue))
+      this.currentValue = Math.max(this.bottomValue,Math.min(this.topValue,this.currentValue))
       this.mouseX = mouseX
     }
   }
