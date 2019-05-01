@@ -415,10 +415,11 @@ class Table {
 			for(let j = 0; j < tiedHands.length; j++){
 				let winner = this.players[tiedHands[j][0]];
 				let payout = this.pots.payoutWinner(winner.totalBet);
-				console.log("Player "+winner.name+" has won! With totalBet: "+winner.totalBet+" and currentBet: "+winner.currentBet)
 				payoutPerPerson += Math.ceil(payout/(tiedHands.length-j))
-				console.log(payout)
 				winner.stack += payoutPerPerson
+				if(payoutPerPerson!=0){
+					sendMessage("Player "+winner.name+" has won "+payoutPerPerson+" with "+getHandString(tiedHands[j][2])+"!")
+				}
 			}
 			i++;
 		}
@@ -449,7 +450,8 @@ class Player {
 					 'Alex','Tan','Alex Tan','Chostick','Inhee','Banaenae','Flying Arab',
 					 'Shovel Hermit','Carissa','Kiley','Maddie Pots','Belinda','James',
 					 'Parrp','LotsOfRamen69','EllenPage','Thomas','Fuck Lmao Almost Forgot About Devon',
-					 'Devon','Dev','Lydia']
+					 'Devon','Dev','Lydia','Maddie Potts','Erin','Gary','June','Anna Thorton',
+					 'Doug','Furrit','DMONEYTHE******','DMONEYTHEKING']
 		let index = Math.floor(Math.random()*names.length)
 		return names[index]
 	}
@@ -705,6 +707,90 @@ class Pots {
 	}
 }
 
+function getHandString(score){
+	let str = ""
+	switch(score[0]){
+		case 0:{
+			str += "High card "
+			for(let i = 1; i < score.length; i++){
+				str += VALUES[score[i]-2]
+				if(i != score.length){
+					str += ","
+				}
+			}
+			return str
+		}
+		case 1:{
+			str += "Pair of "+VALUES[score[1]-2] + "s "
+			if(score.length > 2){
+				str += "with "
+			}
+			for(let i = 1; i < score.length; i++){
+				str += VALUES[score[i]-2]
+				if(i != score.length){
+					str += ","
+				} else {
+					str += " kickers"
+				}
+			}
+			return str
+		}
+		case 2:{
+			str += "Two Pair with "+VALUES[score[1]-2]+"s and " + VALUES[score[2]-2] + "s "
+			if(score.length > 3){
+				str += "with "+VALUES[score[3]-2]+" kicker"
+			}
+			return str
+		}
+		case 3:{
+			str += "Three of a kind of "+VALUES[score[1]-2] + "s "
+			if(score.length > 2){
+				str += "with "
+			}
+			for(let i = 1; i < score.length; i++){
+				str += VALUES[score[i]-2]
+				if(i != score.length){
+					str += ","
+				} else {
+					str += " kickers"
+				}
+			}
+			return str
+		}
+		case 4:{
+			str += VALUES[score[1]-2] + " high straight"
+			return str
+		}
+		case 5:{
+			str += VALUES[score[1]-2] + " high flush "
+			if(score.length > 2){
+				str += "with "
+			}
+			for(let i = 1; i < score.length; i++){
+				str += VALUES[score[i]-2]
+				if(i != score.length){
+					str += ","
+				}
+			}
+			return str
+		}
+		case 6:{
+			str += VALUES[score[1]-2]+"s full of "+VALUES[score[2]-2]+"s"
+			return str
+		}
+		case 7:{
+			str += "Four of a kind of "+VALUES[score[1]-2]+"s "
+			if(score.length > 3){
+				str += "with "+VALUES[score[2]-2]+" kicker"
+			}
+			return str
+		}
+		case 8:{
+			str += VALUES[score[1]-2] + " high straight flush"
+			return str
+		}
+	}
+}
 
 function getHandScore(hand){
 	let score = getScoreStraightFlush(hand)
@@ -760,6 +846,7 @@ function getScoreStraightFlush(hand){
 		if(countMap.has(SUITS[i])){
 			let counts = countMap.get(SUITS[i])
 			if(counts.length >= 5){
+				let streak = 1
 				let startValue = -1
 				for(let j = 0; j < counts.length; j++){
 					if(startValue == counts[j]+streak){
