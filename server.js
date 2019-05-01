@@ -174,7 +174,9 @@ class Table {
 		}
 		for(let i = 0; i < this.players.length; i++){
 			this.players[i].cards = cards[i]
+			this.players[i].updateHandStrength()
 			io.to(`${this.players[i].socketId}`).emit('table',this)
+			this.players[i].handStrength = ""
 			this.players[i].cards = []
 		}
 		for(let i = 0; i < this.players.length; i++){
@@ -442,6 +444,7 @@ class Player {
 		this.totalBet = 0
 		this.inHand = false
 		this.isTurn = false
+		this.handStrength = ""
 		this.name = this.getRandomName()
 	}
 
@@ -451,7 +454,7 @@ class Player {
 					 'Shovel Hermit','Carissa','Kiley','Maddie Pots','Belinda','James',
 					 'Parrp','LotsOfRamen69','EllenPage','Thomas','Fuck Lmao Almost Forgot About Devon',
 					 'Devon','Dev','Lydia','Maddie Potts','Erin','Gary','June','Anna Thorton',
-					 'Doug','Furrit','DMONEYTHE******','DMONEYTHEKING']
+					 'Doug','Furrit','DMONEYTHE****','DMONEYTHEKING']
 		let index = Math.floor(Math.random()*names.length)
 		return names[index]
 	}
@@ -463,6 +466,18 @@ class Player {
 
 	clearCards(){
 		this.cards.length = 0;
+	}
+
+	updateHandStrength(){
+		let hand = []
+		for(let i = 0; i < this.cards.length; i++){
+			hand.push(JSON.parse(JSON.stringify(this.cards[i])))
+		}
+		for(let i = 0; i < TABLE.cards.length; i++){
+			hand.push(JSON.parse(JSON.stringify(TABLE.cards[i])))
+		}
+		let score = getHandScore(hand)
+		this.handStrength = getHandString(score)
 	}
 
 	async getBet() {
@@ -569,19 +584,9 @@ class Card {
 
 function sortHands(hands){
 	console.log("Sorting hands")
-	sortCards(hands)
 	getScoresForAllHands(hands)
 	hands.sort(compareScores)
 	return mergeTies(hands)
-}
-
-function sortCards(hands){
-	for(let i = 0; i < hands.length; i++){
-		let hand = hands[i][1]
-		hand.sort(function(card1,card2){
-			return VALUES_MAP.get(card2.value) - VALUES_MAP.get(card1.value)
-		})
-	}
 }
 
 function getScoresForAllHands(hands){
@@ -714,7 +719,7 @@ function getHandString(score){
 			str += "High card "
 			for(let i = 1; i < score.length; i++){
 				str += VALUES[score[i]-2]
-				if(i != score.length){
+				if(i != score.length-1){
 					str += ","
 				}
 			}
@@ -725,9 +730,9 @@ function getHandString(score){
 			if(score.length > 2){
 				str += "with "
 			}
-			for(let i = 1; i < score.length; i++){
+			for(let i = 2; i < score.length; i++){
 				str += VALUES[score[i]-2]
-				if(i != score.length){
+				if(i != score.length-1){
 					str += ","
 				} else {
 					str += " kickers"
@@ -747,9 +752,9 @@ function getHandString(score){
 			if(score.length > 2){
 				str += "with "
 			}
-			for(let i = 1; i < score.length; i++){
+			for(let i = 2; i < score.length; i++){
 				str += VALUES[score[i]-2]
-				if(i != score.length){
+				if(i != score.length-1){
 					str += ","
 				} else {
 					str += " kickers"
@@ -766,9 +771,9 @@ function getHandString(score){
 			if(score.length > 2){
 				str += "with "
 			}
-			for(let i = 1; i < score.length; i++){
+			for(let i = 2; i < score.length; i++){
 				str += VALUES[score[i]-2]
-				if(i != score.length){
+				if(i != score.length-1){
 					str += ","
 				}
 			}
@@ -793,6 +798,9 @@ function getHandString(score){
 }
 
 function getHandScore(hand){
+	hand.sort(function(card1,card2){
+		return VALUES_MAP.get(card2.value) - VALUES_MAP.get(card1.value)
+	})
 	let score = getScoreStraightFlush(hand)
 	if(score.length != 0){
 		return score
@@ -1117,7 +1125,7 @@ function getScoreTwoOfAKind(hand){
 function getScoreHighCard(hand){
 	let score = []
 	score.push(0)
-	for(let i = 0; i < 5; i++){
+	for(let i = 0; i < hand.length; i++){
 		score.push(VALUES_MAP.get(hand[i].value))
 	}
 	return score

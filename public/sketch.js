@@ -88,7 +88,7 @@ function addMessage(message){
 }
 
 function mouseClicked() {
-  if(tableView){
+  if(tableView && table){
     tableView.handleMouseClick()
   }
 }
@@ -99,8 +99,10 @@ function draw(){
 
 function drawObjects(){
   background(255)
-  if(tableView){
+  if(tableView && table){
     tableView.draw()
+  } else {
+    // Loading type page thing
   }
 }
 
@@ -319,35 +321,47 @@ function drawOtherPlayer(x,y,width,height,cardWidth,cardHeight,playerIndex,orien
   } else if(!player.inHand){
     fill(150)
   }
-  rect(x,y,width,height)
-  fill(255)
-  // noStroke()
-  rect(x+width*insetRatio,y+height*insetRatio,width*(1-2*insetRatio),height*(1-2*insetRatio))
+  let border = new Border(x+insetRatio*width,y+insetRatio*height,width*(1-2*insetRatio),height*(1-2*insetRatio),insetRatio)
+  border.draw()
+  insetRatio *= 2
+  x = x + insetRatio*width
+  y = y + insetRatio*height
+  width = width*(1-2*insetRatio)
+  height = height*(1-2*insetRatio)
+  cardWidth = cardWidth*(1-2*insetRatio)
+  cardHeight = cardHeight*(1-2*insetRatio)
+
   stroke(0)
   fill(0)
+  let textStats = []
+  textStats.push(player.name)
+  if(player.handStrength != ""){
+    textStats.push("Hand: "+player.handStrength)
+  }
+  textStats.push("Stack: "+player.stack)
+  textStats.push("Current Bet: "+player.currentBet)
+  textStats.push("Total Bet: "+player.totalBet)
+
   if(orientation=="left"){
-    text(player.name,x,y)
-    text("Stack: "+player.stack,x,y+height/2/4)
-    text("Current Bet: "+player.currentBet,x,y+height/2*2/4)
-    text("Total Bet: "+player.totalBet,x,y+height/2*3/4)
+    for(let i = 0; i < textStats.length; i++){
+      text(textStats[i],x,y+i*height/2/textStats.length)
+    }
     drawCard(player.cards[0]?player.cards[0].suit:player.cards[0],player.cards[0]?player.cards[0].value:player.cards[0],
              x,y+height/2,cardHeight,cardWidth,orientation)
     drawCard(player.cards[1]?player.cards[1].suit:player.cards[1],player.cards[1]?player.cards[1].value:player.cards[1],
              x,y+height/2+cardWidth,cardHeight,cardWidth,orientation)
   } else if(orientation=="top"){
-    text(player.name,x+width/2,y)
-    text("Stack: "+player.stack,x+width/2,y+height/4)
-    text("Current Bet: "+player.currentBet,x+width/2,y+height*2/4)
-    text("Total Bet: "+player.totalBet,x+width/2,y+height*3/4)
+    for(let i = 0; i < textStats.length; i++){
+      text(textStats[i],x+width/2,y+i*height/textStats.length)
+    }
     drawCard(player.cards[0]?player.cards[0].suit:player.cards[0],player.cards[0]?player.cards[0].value:player.cards[0],
              x+width/2-2*cardWidth,y,cardWidth,cardHeight,orientation)
     drawCard(player.cards[1]?player.cards[1].suit:player.cards[1],player.cards[1]?player.cards[1].value:player.cards[1],
              x+width/2-cardWidth,y,cardWidth,cardHeight,orientation)
   } else if(orientation=="right"){
-    text(player.name,x,y)
-    text("Stack: "+player.stack,x,y+height/2/4)
-    text("Current Bet: "+player.currentBet,x,y+height/2*2/4)
-    text("Total Bet: "+player.totalBet,x,y+height/2*3/4)
+    for(let i = 0; i < textStats.length; i++){
+      text(textStats[i],x,y+i*height/2/textStats.length)
+    }
     drawCard(player.cards[0]?player.cards[0].suit:player.cards[0],player.cards[0]?player.cards[0].value:player.cards[0],
              x+width-cardHeight,y+height/2,cardHeight,cardWidth,orientation)
     drawCard(player.cards[1]?player.cards[1].suit:player.cards[1],player.cards[1]?player.cards[1].value:player.cards[1],
@@ -527,14 +541,15 @@ class PlayerUI {
     this.y = y
     this.width = width
     this.height = height
-    this.playerStats = new PlayerInfo(x,y,width,height/3)
-    this.playerCards = new PlayerCards(x,y+height/3,width/2,height*2/3)
-    this.bettingUI = new BettingUI(x+width/2,y+height/3,width/2,height*2/3)
+    let insetRatio = .05
+    this.border = new Border(x+insetRatio*width,y+insetRatio*height,width*(1-2*insetRatio),height*(1-2*insetRatio),insetRatio)
+    insetRatio *= 2
+    this.playerInfo = new PlayerInfo(x+insetRatio*width,y+insetRatio*height,width*(1-2*insetRatio),height*(1-2*insetRatio)/3)
+    this.playerCards = new PlayerCards(x+insetRatio*width,y+insetRatio*height+height*(1-2*insetRatio)/3,width*(1-2*insetRatio)/2,height*(1-2*insetRatio)*2/3)
+    this.bettingUI = new BettingUI(x+insetRatio*width+(1-2*insetRatio)*width/2,y+insetRatio*height+height*(1-2*insetRatio)/3,width*(1-2*insetRatio)/2,height*(1-2*insetRatio)*2/3)
   }
 
   draw(){
-    
-    let insetRatio = .05
     if(player.isTurn){
       fill([50,100,50])
     } else if(player.inHand){
@@ -542,13 +557,10 @@ class PlayerUI {
     } else if(!player.inHand){
       fill(150)
     }
-    rect(this.x,this.y,this.width,this.height)
-    fill(255)
-    // noStroke()
-    rect(this.x+this.width*insetRatio,this.y+this.height*insetRatio,this.width*(1-2*insetRatio),this.height*(1-2*insetRatio))
+    this.border.draw()
     stroke(0)
     fill(0)
-    this.playerStats.draw()
+    this.playerInfo.draw()
     this.playerCards.draw()
     if(player.isTurn){
       this.bettingUI.draw()
@@ -561,7 +573,8 @@ class PlayerUI {
 
   handleMouseClick(){
     if(this.isMouseWithin()){
-      this.playerStats.handleMouseClick()
+      this.border.handleMouseClick()
+      this.playerInfo.handleMouseClick()
       this.playerCards.handleMouseClick()
       if(player.isTurn){
         this.bettingUI.handleMouseClick()
@@ -584,10 +597,13 @@ class PlayerInfo {
       return
     }
     fill(0)
-    text(player.name,this.x,this.y);
-    text("Stack: "+player.stack,this.x,this.y+this.height/4);
-    text("Current Bet: "+player.currentBet,this.x,this.y+this.height*2/4);
-    text("Total Bet: "+player.totalBet,this.x,this.y+this.height*3/4);
+    textAlign(CENTER)
+    text(player.name,this.x+this.width/2,this.y);
+    text("Hand: "+player.handStrength,this.x+this.width/2,this.y+this.height/5);
+    text("Stack: "+player.stack,this.x+this.width/2,this.y+this.height*2/5);
+    text("Current Bet: "+player.currentBet,this.x+this.width/2,this.y+this.height*3/5);
+    text("Total Bet: "+player.totalBet,this.x+this.width/2,this.y+this.height*4/5);
+    textAlign(LEFT)
   }
 
   isMouseWithin(){
@@ -818,4 +834,31 @@ class Slider {
     return this.currentValue
   }
 
+}
+
+class Border {
+
+  constructor(x,y,width,height,insetRatio){
+    this.x = x
+    this.y = y
+    this.width = width
+    this.height = height
+    this.insetRatio = insetRatio
+  }
+
+  draw(){
+    rect(this.x,this.y,this.width,this.height,this.width*this.insetRatio)
+    fill(255)
+    rect(this.x+this.width*this.insetRatio,this.y+this.height*this.insetRatio,this.width*(1-2*this.insetRatio),this.height*(1-2*this.insetRatio),this.width*this.insetRatio)
+  }
+
+  isMouseWithin(){
+    return isMouseWithin(this.x,this.y,this.width,this.height)
+  }
+
+  handleMouseClick(){
+    if(this.isMouseWithin()){
+
+    }
+  }
 }
