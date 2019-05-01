@@ -171,6 +171,7 @@ class Table {
 		for(let i = 0; i < this.players.length; i++){
 			cards.push(JSON.parse(JSON.stringify(this.players[i].cards)))
 			this.players[i].cards = []
+			this.players[i].handStrength = ""
 		}
 		for(let i = 0; i < this.players.length; i++){
 			this.players[i].cards = cards[i]
@@ -193,13 +194,17 @@ class Table {
 			cards.push(JSON.parse(JSON.stringify(this.players[i].cards)))
 			if(!this.players[i].inHand){
 				this.players[i].cards = []
+			} else {
+				this.players[i].updateHandStrength()
 			}
 		}
 		for(let i = 0; i < this.players.length; i++){
 			this.players[i].cards = cards[i]
+			this.players[i].updateHandStrength()
 			io.to(`${this.players[i].socketId}`).emit('table',this)
 			if(!this.players[i].inHand){
 				this.players[i].cards = []
+				this.players[i].handStrength = ""
 			}
 		}
 		for(let i = 0; i < this.players.length; i++){
@@ -243,17 +248,13 @@ class Table {
 		let numTurns = 0
 		while((!this.isPotGood() || numTurns < this.players.length) && (this.playersInHand()>1) && ((this.playersInHand()-this.playersAllIn())>1 || !this.isPotGood())){
 			if(this.players[i].inHand && this.players[i].stack != 0){
-				await this.players[i].getBet() // Maybe check that player is in hand...
-				// console.log("Player response: ",this.players[i])
+				await this.players[i].getBet()
 				if(this.players[i].currentBet == this.currentBet || (this.players[i].currentBet < this.currentBet && this.players[i].stack == 0)){ // Call
-					console.log("Player "+this.players[i].name+" called "+this.players[i].currentBet)
 					sendMessage("Player "+this.players[i].name+(this.players[i].currentBet==0?" checked":" called "+this.players[i].currentBet))
 				} else if (this.players[i].currentBet < this.currentBet && this.players[i].stack != 0){ // Fold
 					this.players[i].inHand = false
-					console.log("Player "+this.players[i].name+" folded")
 					sendMessage("Player "+this.players[i].name+" folded")
 				} else { // Raise
-					console.log("Player "+this.players[i].name+" raised to "+this.players[i].currentBet)
 					sendMessage("Player "+this.players[i].name+" raised to "+this.players[i].currentBet)
 					this.currentBet = this.players[i].currentBet
 				}
@@ -273,7 +274,7 @@ class Table {
 					break;
 				}
 			}
-			console.log("Only Player "+player.socketId+" remains!")
+			sendMessage("Only Player "+player.name+" remains!")
 			player.stack += this.pots.payoutWinner(player.totalBet)
 			if(this.pots.getTotalPotAmount()!=0){
 				console.log("handleOnePersonRemaining: Last person not qualified for all the money")
@@ -483,7 +484,7 @@ class Player {
 	async getBet() {
 		let getResponse = function() {
 			return new Promise((resolve, reject) => {
-				console.log("Getting bet from "+this.socketId)
+				console.log("Getting bet from "+this.name)
 				let timer;
 				this.isTurn = true;
 				let timeAmount = 60*1000
@@ -492,7 +493,6 @@ class Player {
 				TABLE.updateAllPlayers()
 		
 				function responseHandler(message) {
-					console.log("Player responded to bet")
 					resolve(message);
 					clearTimeout(timer);
 				}
@@ -514,7 +514,6 @@ class Player {
 			});
 		}.bind(this)
 		let response = await getResponse();
-		// console.log("Response: ",response)
 		TABLE.updatePlayer(this.socketId,response)
 	}
 
@@ -583,7 +582,6 @@ class Card {
 }
 
 function sortHands(hands){
-	console.log("Sorting hands")
 	getScoresForAllHands(hands)
 	hands.sort(compareScores)
 	return mergeTies(hands)
@@ -606,7 +604,6 @@ function compareScores(hand1,hand2){ // Ret + if score2 is better
 }
 
 function mergeTies(hands){
-	console.log("Hands",JSON.stringify(hands))
 	let ret = []
 	let curTie = [hands[0]]
 	for(let i = 0; i < hands.length-1; i++){
@@ -626,7 +623,9 @@ function mergeTies(hands){
 		})
 		ret.push(curTie)
 	}
-	console.log("Ret",JSON.stringify(ret))
+	if(ret.length != hands.length){
+		console.log("Unmerged Tie hands ",JSON.stringify(hands))
+	}
 	return ret
 }
 

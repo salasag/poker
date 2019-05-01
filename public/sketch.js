@@ -677,8 +677,8 @@ class BettingUI {
     this.call = new Button(x+width/3,y+height/5,width/3,height*4/5,table.currentBet==player.currentBet?"Check":"Call",()=>{
       if(table.currentBet-player.currentBet > player.stack){
         player.currentBet += player.stack
-        player.stack -= player.stack
         player.totalBet += player.stack;
+        player.stack -= player.stack
       } else {
         player.stack -= table.currentBet-player.currentBet
         player.totalBet += table.currentBet-player.currentBet
