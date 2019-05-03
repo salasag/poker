@@ -49,6 +49,7 @@ function newConnection(socket){
 }
 
 function sendMessage(message){
+	console.log(message)
 	io.emit('message',message)
 }
 
