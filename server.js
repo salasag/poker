@@ -33,7 +33,6 @@ var STARTING_STACK_AMOUNT = 10000;
 
 function newConnection(socket){
 	console.log('new connection ' + socket.id);
-	// console.log('Sockets',io.sockets.sockets);
 	if(Object.keys(io.sockets.sockets).length == 1){
 		TABLE = new Table()
 	}
@@ -456,7 +455,7 @@ class Player {
 					 'Shovel Hermit','Carissa','Kiley','Maddie Pots','Belinda','James',
 					 'Parrp','LotsOfRamen69','EllenPage','Thomas','Fuck Lmao Almost Forgot About Devon',
 					 'Devon','Dev','Lydia','Maddie Potts','Erin','Gary','June','Anna Thorton',
-					 'Doug','Furrit','DMONEYTHE****','DMONEYTHEKING']
+					 'Doug','Furritt','DMONEYTHE****','DMONEYTHEKING']
 		let index = Math.floor(Math.random()*names.length)
 		return names[index]
 	}
