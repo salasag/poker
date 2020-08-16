@@ -29,7 +29,6 @@ var timeLeft = 0;
 var timeMax = 1;
 var timeStart = 0;
 
-
 function preload(){
   FONT = loadFont("assets/emulogic.ttf")
   IMAGE_2     = loadImage('assets/2.png');
